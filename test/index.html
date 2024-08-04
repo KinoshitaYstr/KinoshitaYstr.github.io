@@ -1,0 +1,84 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>test</title>
+
+    <style>
+        html {
+            height: 100%;
+            background-color: #000;
+        }
+        body {
+            height: 100%;
+            margin: 0;
+        }
+        .css-base {
+            height: 100%;
+            background-color: aqua;
+        }
+
+        p {
+            margin: 0;
+            color: #f00;
+        }
+    </style>
+
+    <script>
+        console.log('js hello!');
+
+        window.addEventListener('load', function (e) {
+            // set click event
+            document.getElementById('js-base').addEventListener('click', allClickEventHandler);
+        });
+
+        // click handler
+        function allClickEventHandler(e) {
+            const str = 'neko-san';
+            const className = str+Math.random();
+            createNormalPTag(className, e.pageX, e.pageY);
+            willDeleteTimer(className, 5000);
+        }
+
+        // create p tag
+        function createNormalPTag(str, settingX, settingY) {
+            const base = document.getElementById('js-base');
+
+            // create p tag
+            const newPTag = document.createElement('p');
+            const newContent = document.createTextNode(str);
+            newPTag.append(newContent);
+
+            // setting position
+            newPTag.style.position = 'absolute';
+            newPTag.style.left = settingX+'px';
+            newPTag.style.top = settingY+'px';
+            newPTag.className = str;
+
+            // append
+            base.append(newPTag);
+        }
+
+        // delete element
+        function willDeleteTimer(str, delay) {
+            setTimeout(function() {
+                // https://qiita.com/hide8888/items/1552ef90ca2f74e0ce4c
+                // https://developer.mozilla.org/ja/docs/Web/CSS/opacity
+                targets = document.getElementsByClassName(str);
+                while(targets.length) {
+                    targets.item(0).remove();
+                }
+            }, delay);
+        }
+    </script>
+</head>
+<body>
+    <div id="js-base" class="css-base">
+        <p>
+            hello world
+        </p>
+    </div>
+    <p>hello world</p>
+</body>
+</html>
