@@ -37,8 +37,63 @@
         function allClickEventHandler(e) {
             const str = 'neko-san';
             const className = str+Math.random();
-            createNormalPTag(className, e.pageX, e.pageY);
-            willDeleteTimer(className, 5000);
+
+            // createNormalPTag(className, e.pageX, e.pageY);
+            // willDeleteTimer(className, 5000);
+
+            displayAndRemoveString(str, e.pageX, e.pageY)
+        }
+
+        // create anim display string
+        function displayAndRemoveString(str, posX, posY) {
+            const base = document.getElementById('js-base');
+            const strLen = str.length;
+            const strSize = 80;
+            const originId = Math.random();
+
+            const displayDivs = [];
+
+            for (let i = 0; i < strLen; i++) {
+                console.log(' setting - '+i+' -> '+str[i]);
+                const newDiv = document.createElement('div');
+                newDiv.className = originId+'-'+i;
+                newDiv.append(document.createTextNode(str[i]));
+                newDiv.style.fontSize = strSize+'px';
+                // setting pos
+                newDiv.style.position = 'absolute';
+                newDiv.style.top = posY+'px';
+                newDiv.style.left = posX+strSize*i+'px';
+                newDiv.style.opacity = 0.0; // hide
+
+                base.append(newDiv);
+            }
+
+            // proc display
+            const displayPer = 50;
+            const addOpacityVal = 1/displayPer;
+            for (let i = 0; i < strLen; i++) {
+                setTimeout(function() {
+                    const targetDivs = document.getElementsByClassName(originId+'-'+i);
+                    let nowOpacity = 0.0;
+                    const intervalId = setInterval(function() {
+                        nowOpacity += addOpacityVal;
+                        targetDivs.item(0).style.opacity = nowOpacity;
+                        if (nowOpacity >= 0.9) {
+                            clearInterval(intervalId)
+                            // proc delete
+                            nowOpacity = targetDivs.item(0).style.opacity;
+                            const deleteIntervalId = setInterval(function() {
+                                nowOpacity -= addOpacityVal;
+                                targetDivs.item(0).style.opacity = nowOpacity;
+                                if (nowOpacity <= 0) {
+                                    targetDivs.item(0).remove();
+                                    clearInterval(deleteIntervalId);
+                                }
+                            }, 5);
+                        }
+                    }, 5);
+                }, 50*i);
+            }
         }
 
         // create p tag
