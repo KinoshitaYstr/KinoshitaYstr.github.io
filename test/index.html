@@ -69,15 +69,27 @@
             }
 
             // proc display
-            const displayPer = 50;
+            const displayPer = 100;
             const addOpacityVal = 1/displayPer;
+            // move speed
+            const speed = 1;
+            const angle = 30;
+            const radian = Math.PI*angle/180;
+            const addSpeedX = Math.cos(radian)*speed;
+            const addSpeedY = Math.sin(radian)*speed;
             for (let i = 0; i < strLen; i++) {
                 setTimeout(function() {
                     const targetDivs = document.getElementsByClassName(originId+'-'+i);
                     let nowOpacity = 0.0;
+                    let y = Number(targetDivs.item(0).style.top.replace("px", ""));
+                    let x = Number(targetDivs.item(0).style.left.replace("px", ""));
                     const intervalId = setInterval(function() {
                         nowOpacity += addOpacityVal;
                         targetDivs.item(0).style.opacity = nowOpacity;
+                        x = x+addSpeedX;
+                        y = y+addSpeedY;
+                        targetDivs.item(0).style.top = y+"px";
+                        targetDivs.item(0).style.left = x+"px";
                         if (nowOpacity >= 0.9) {
                             clearInterval(intervalId)
                             // proc delete
@@ -85,6 +97,10 @@
                             const deleteIntervalId = setInterval(function() {
                                 nowOpacity -= addOpacityVal;
                                 targetDivs.item(0).style.opacity = nowOpacity;
+                                x = x+addSpeedX;
+                                y = y+addSpeedY;
+                                targetDivs.item(0).style.top = y+"px";
+                                targetDivs.item(0).style.left = x+"px";
                                 if (nowOpacity <= 0) {
                                     targetDivs.item(0).remove();
                                     clearInterval(deleteIntervalId);
