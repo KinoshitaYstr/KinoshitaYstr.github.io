@@ -23,6 +23,8 @@
             margin: 0;
             color: #f00;
         }
+
+        /* https://coco-factory.jp/ugokuweb/move01/7-1-12/ */
     </style>
 
     <script>
@@ -72,12 +74,13 @@
             const displayPer = 100;
             const addOpacityVal = 1/displayPer;
             // move speed
-            const speed = 1;
-            const angle = 30;
-            const radian = Math.PI*angle/180;
-            const addSpeedX = Math.cos(radian)*speed;
-            const addSpeedY = Math.sin(radian)*speed;
+            const speed = 0.6;
             for (let i = 0; i < strLen; i++) {
+                const angle = Math.floor(360*Math.random());
+                const radian = Math.PI*angle/180;
+                const addSpeedX = Math.cos(radian)*speed*Math.random();
+                const addSpeedY = Math.sin(radian)*speed*Math.random();
+
                 setTimeout(function() {
                     const targetDivs = document.getElementsByClassName(originId+'-'+i);
                     let nowOpacity = 0.0;
@@ -97,8 +100,8 @@
                             const deleteIntervalId = setInterval(function() {
                                 nowOpacity -= addOpacityVal;
                                 targetDivs.item(0).style.opacity = nowOpacity;
-                                x = x+addSpeedX;
-                                y = y+addSpeedY;
+                                x = x+addSpeedX*Math.random();
+                                y = y+addSpeedY*Math.random();
                                 targetDivs.item(0).style.top = y+"px";
                                 targetDivs.item(0).style.left = x+"px";
                                 if (nowOpacity <= 0) {
