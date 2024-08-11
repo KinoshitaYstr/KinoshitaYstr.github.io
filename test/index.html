@@ -24,7 +24,31 @@
             color: #f00;
         }
 
-        /* https://coco-factory.jp/ugokuweb/move01/7-1-12/ */
+        .ripple-base {
+            width: 200px;
+            height: 200px;
+            animation: 2s circleAnimation1 linear infinite;
+
+            position: absolute;
+            display: inline-block;
+            border: 3px double #fff;
+            border-radius: 50%;
+            outline: none;
+            opacity: 0;
+        }
+        @keyframes circleAnimation1 {
+            0% {
+                transform: scale(0.68);
+            }
+            35% {
+                transform: scale(1.2);
+                opacity: 1;
+            }
+            100% {
+                transform: scale(1.7);
+                opacity: 0;
+            }
+        }
     </style>
 
     <script>
@@ -152,6 +176,7 @@
         <p>
             hello world
         </p>
+        <div class="ripple-base"></div>
     </div>
     <p>hello world</p>
 </body>
