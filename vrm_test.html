@@ -1,0 +1,32 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <title>test vrm</title>
+
+    <script src="https://unpkg.com/three@0.142.0/build/three.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/three@0.128.0/examples/js/loaders/GLTFLoader.js"></script>
+    <script src="js/three-vrm.js"></script>
+
+</head>
+<body>
+    <script>
+        const scene = new THREE.Scene();
+        const loader = new THREE.GLTFLoader();
+
+        // カメラの準備
+        const camera = new THREE.PerspectiveCamera(45, 960/540, 0.1, 1000);
+        camera.position.set(0, 1.4, -1.0);
+        camera.rotation.set(0, Math.PI, 0);
+
+        // レンダラーの準備
+        const renderer = new THREE.WebGLRenderer();
+        renderer.setSize(960, 540);
+        document.body.appendChild(renderer.domElement);
+
+        loader.load(
+            'https://github.com/KinoshitaYstr/KinoshitaYstr.github.io/raw/refs/heads/master/AliciaSolid.vrm'
+        )
+    </script>
+</body>
+</html>
