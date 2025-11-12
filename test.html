@@ -10,7 +10,7 @@
 
 </head>
 <body>
-    
+    <!-- https://blog.one-cut.xyz/%E3%80%90javascript%E3%80%91mediapipe%E3%81%A73%E6%AC%A1%E5%85%83%E5%A7%BF%E5%8B%A2%E6%8E%A8%E5%AE%9A/ -->
     <div class="main">
         <!-- カメラ入力(非表示) -->
         <video id="inputVideo" style="display: none;"></video>
@@ -57,6 +57,62 @@
         });
 
         camera.start();
+    </script>
+
+    <div id="vrm-output">hello</div>
+
+    <script type="module">
+        // CDNからThree.js読み込み
+        import * as THREE from'https://unpkg.com/three@0.126.1/build/three.module.js';
+        import { OrbitControls } from 'https://unpkg.com/three@0.126.1/examples/jsm/controls/OrbitControls.js';
+        import { GLTFLoader } from 'https://unpkg.com/three@0.126.1/examples/jsm/loaders/GLTFLoader.js';
+
+        let vrmCamera;
+        let vrmScene;
+        let vrmRenderer;
+        let vrmCameraControl;
+
+        function vrmInit() {
+            vrmScene = new THREE.Scene();
+            vrmCamera = new THREE.PerspectiveCamera(
+                45,
+                600,
+                400,
+                0.1,
+                1000
+            );
+            vrmCamera.position.y = 5;
+            vrmCamera.position.z = 50;
+            vrmScene.add(vrmCamera);
+            vrmCamera.aspect = 600/400;
+            vrmCamera.updateProjectionMatrix();
+
+            vrmRenderer = new THREE.WebGLRenderer();
+            vrmRenderer.setClearColor(new THREE.Color(0xeeeeee));
+            vrmRenderer.setSize(600, 400);
+
+            const loader = new GLTFLoader();
+            loader.load(
+                './AliciaSolid.vrm', function(vrm) {
+                    vrm.scene.scale.set(6, 6, 6); // モデルスケール変更
+                    vrm.scene.position.set(0, 0, 0); // モデル位置変更
+                    vrm.scene.rotation.set(0, (0 * Math.PI /180), 0); // モデル向き変更
+                    vrmScene.add(vrm.scene);
+                }, undefined, function(error) {
+                    console.log(error);
+                }
+            );
+            document.getElementById('vrm-output').appendChild(vrmRenderer.domElement);
+
+            render();
+        }
+
+        function render() {
+            requestAnimationFrame(render);
+            vrmRenderer.render(vrmScene, vrmCamera);
+        }
+
+        window.addEventListener("load", vrmInit);
     </script>
 </body>
 </html>
