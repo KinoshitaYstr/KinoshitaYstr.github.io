@@ -258,7 +258,7 @@
         const gltf = await vrmLoader.loadAsync('./AliciaSolid.vrm');
         const vrmModel = gltf.userData.vrm;
         vrmModel.scene.scale.set(6, 6, 6); // モデルスケール変更
-        vrmModel.scene.position.set(0, 0, 0); // モデル位置変更
+        vrmModel.scene.position.set(0, -5, 0); // モデル位置変更
         vrmModel.scene.rotation.set(0, (180 * Math.PI /180), 0); // モデル向き変更
         vrmModel.humanoid.setPose( { hips : { rotation : new THREE.Quaternion().setFromAxisAngle( new THREE.Vector3( 0 , 1 , 0 ) , Math.PI ).toArray() } } ); 
         console.log(vrmModel);
