@@ -3,6 +3,13 @@
 <html lang="ja">
   <head>
     <title>gtlf load</title>
+
+    <!-- 必要なライブラリ読み込み -->
+    <script src="https://cdn.jsdelivr.net/npm/@mediapipe/camera_utils/camera_utils.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/@mediapipe/drawing_utils/drawing_utils.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/@mediapipe/pose/pose.js"></script>
+
+
     <style>
       body {
         /*ページ全体を使用するためmarginを0に設定
@@ -10,88 +17,314 @@
         margin: 0;
         overflow: hidden;
       }
+      #videoInput {
+        display: none;
+      }
     </style>
   </head>
   <body>
-    <!-- (表示) 出力を保持する -->
-    <div id="WebGL-output"></div>
+    <div id="main">
+      <!-- カメラ入力（非表示） -->
+       <video id="videoInput"></video>
+      <!-- (表示) 出力を保持する -->
+      <div id="WebGL-output"></div>
+    </div>
+    <!-- three-vrm読み込みのために必要 -->
+    <script type="importmap">
+      {
+        "imports": {
+          "three": "https://threejs.org/build/three.module.js",
+          "three/addons/": "https://cdn.jsdelivr.net/npm/three@0.180.0/examples/jsm/",
+          "@pixiv/three-vrm": "https://cdn.jsdelivr.net/npm/@pixiv/three-vrm@3/lib/three-vrm.module.min.js"
+        }
+      }
+    </script>
     <!-- Three.jsコードの記述 -->
     <script type="module">
       // CDNからThree.js読み込み
       import * as THREE from'https://unpkg.com/three@0.126.1/build/three.module.js';
       import { OrbitControls } from 'https://unpkg.com/three@0.126.1/examples/jsm/controls/OrbitControls.js';
       import { GLTFLoader } from 'https://unpkg.com/three@0.126.1/examples/jsm/loaders/GLTFLoader.js';
-      var camera;       // カメラ
-      var scene;        // シーン
-      var renderer;     // レンダラー
-      var controls;     // カメラコントロール
+      import { VRMLoaderPlugin } from '@pixiv/three-vrm';
+      
+      // mediapipeの関節番号
+      const MP_POSE = {
+        nose: 0, left_eye_inner: 1, left_eye: 2,
+        left_eye_outer: 3, right_eye_inner: 4,
+        right_eye: 5, right_eye_outer: 6,
+        left_ear: 7, right_ear: 8,
+        mouth_left: 9, mouth_right: 10,
+        left_shoulder: 11, right_shoulder: 12,
+        left_elbow: 13, right_elbow: 14,
+        left_wrist: 15, right_wrist: 16,
+        left_pinky: 17, right_pinky: 18,
+        left_index: 19, right_index: 20,
+        left_thumb: 21, right_thumb: 22,
+        left_hip: 23, right_hip: 24,
+        left_knee: 25, right_knee: 26,
+        left_ankle: 27, right_ankle: 28,
+        left_heel: 29, right_heel: 30,
+        left_foot_index: 31, right_foot_index: 32,
+      }
+      // mediapipe座標をvrmの座標へ変換
+      function convMP2VRMCoord( coord ){
+        return new THREE.Vector3(  -1 * coord.x , -1 * coord.y , coord.z );
+      }
+      // ２つのベクトル(vecA->vecB)のクォータニオンを取得
+      function getQuaternion( vecA , vecB ){
+        // 単位ベクトルに変換
+        let vecUnitA = vecA.clone().normalize();
+        let vecUnitB = vecB.clone().normalize();
+        console.log(vecUnitA,vecUnitB);
+        // ２つのベクトルの外積（回転軸）を計算
+        let vecNormal = new THREE.Vector3();
+        vecNormal.crossVectors( vecUnitA , vecUnitB ).normalize();
+        console.log(vecNormal);
+        // ２つのベクトルの回転角
+        let rad = vecUnitA.angleTo(vecUnitB);
+        //クォータニオンオブジェクトを生成
+        let q = new THREE.Quaternion();
+        q.setFromAxisAngle( vecNormal , rad );
+        // 回転角の象限を確認
+        let dot = vecUnitA.dot( vecUnitB );
+        if( dot > 0 ){
+          // 第１象限か第４象限
+          rad  = rad; // 第1象限と仮定
+          // 回転方向が逆か確認
+          let vec = vecUnitA.clone().applyQuaternion( q );
+          if( vec.angleTo( vecUnitB ) > rad ){
+            //逆回転
+            rad  = 2 * Math.PI - rad;
+            //console.log("第4象限",rad,rad * 180 / Math.PI);
+          }else{
+            //console.log("第１象限",rad,rad * 180 / Math.PI , vec.angleTo( vecUnitB )*180/Math.PI);
+          };
+        }else{
+          // 第2象限か第3象限
+          rad     = rad ;    // 第2象限と仮定
+          // 回転方向が逆か確認
+          let vec = vecUnitA.clone().applyQuaternion( q );
+          if( vec.angleTo( vecUnitB ) > rad ){
+            //逆回転
+            rad  = 2 * Math.PI - rad;
+            //console.log("第3象限",rad,rad * 180 / Math.PI);
+          }else{
+            //console.log("第2象限",rad,rad * 180 / Math.PI , vec.angleTo( vecUnitB )*180/Math.PI);
+          };
+        }
+        // 回転方向を踏まえて、クォータニオンを再計算
+        q = new THREE.Quaternion().setFromAxisAngle( vecNormal, rad );
+        return q;
+      }
+      // MPからVRMのposeを計算する
+      function convToVrmPose(hipPose, mp_coord) {
+        let vecUp           = new THREE.Vector3( 0 , 1 , 0 );
+        let vecDown         = new THREE.Vector3( 0 , -1 , 0 );
+        let vecRight        = new THREE.Vector3( 1 , 0 , 0 );
+        let vecLeft         = new THREE.Vector3( -1 , 0 , 0 );
+        let vecFront        = new THREE.Vector3( 0 , 0 , -1 );
+        let vecBack         = new THREE.Vector3( 0 , 0 , 1 );
+        // 起点
+        let posHip          = new THREE.Vector3( 0 , 0 , 0 );
+        let posLHip         = convMP2VRMCoord( mp_coord[ MP_POSE.left_hip ] );
+        let posRHip         = convMP2VRMCoord( mp_coord[ MP_POSE.right_hip ] );
+        // 下半身
+        let posLKnee        = convMP2VRMCoord( mp_coord[ 25 ] );
+        let posRKnee        = convMP2VRMCoord( mp_coord[ MP_POSE.right_knee ] );
+        let posLAnkle       = convMP2VRMCoord( mp_coord[ MP_POSE.left_ankle ] );
+        let posRAnkle       = convMP2VRMCoord( mp_coord[ MP_POSE.right_ankle ] );
+        let posLHeel        = convMP2VRMCoord( mp_coord[ MP_POSE.left_heel ] );
+        let posRHeel        = convMP2VRMCoord( mp_coord[ MP_POSE.right_heel ] );
+        let posLToes        = convMP2VRMCoord( mp_coord[ MP_POSE.left_foot_index ] );
+        let posRToes        = convMP2VRMCoord( mp_coord[ MP_POSE.right_foot_index ] );
+        // 上半身
+        let posSpine        = posHip.clone();   // MPにないため、代用
+        let posLShoulder    = convMP2VRMCoord( mp_coord[ MP_POSE.left_shoulder ] );
+        let posRShoulder    = convMP2VRMCoord( mp_coord[ MP_POSE.right_shoulder ] );
+        let posNeck         = posLShoulder.clone().add( posRShoulder ).divideScalar(2);   // MPにないため、代用
+        // 顔
+        let posLInnerEye    = convMP2VRMCoord( mp_coord[ MP_POSE.left_eye_inner ] );
+        let posRInnerEye    = convMP2VRMCoord( mp_coord[ MP_POSE.right_eye_inner ] );
+        let posCenterEye    = posLInnerEye.clone().add( posRInnerEye ).divideScalar(2);   // 仮想点
+        let posLMouth       = convMP2VRMCoord( mp_coord[ MP_POSE.mouth_left ] );
+        let posRMouth       = convMP2VRMCoord( mp_coord[ MP_POSE.mouth_right ] );
+        let posCenterMouth  = posLMouth.clone().add( posRMouth ).divideScalar(2);   // 仮想点
+        // 腕
+        let posLElbow       = convMP2VRMCoord( mp_coord[ MP_POSE.left_elbow ] );
+        let posRElbow       = convMP2VRMCoord( mp_coord[ MP_POSE.right_elbow ] );
+        let posLWrist       = convMP2VRMCoord( mp_coord[ MP_POSE.left_wrist ] );
+        let posRWrist       = convMP2VRMCoord( mp_coord[ MP_POSE.right_wrist ] );
+        let posLIndex       = convMP2VRMCoord( mp_coord[ MP_POSE.left_index ] );
+        let posLPinky       = convMP2VRMCoord( mp_coord[ MP_POSE.left_pinky ] );
+        let posLMiddle      = posLIndex.clone().add( posLPinky ).divideScalar(2);   // 仮想点
+        let posRIndex       = convMP2VRMCoord( mp_coord[ MP_POSE.right_index ] );
+        let posRPinky       = convMP2VRMCoord( mp_coord[ MP_POSE.right_pinky ] );
+        let posRMiddle      = posRIndex.clone().add( posRPinky ).divideScalar(2);   // 仮想点
+        let vrmPose = {};          
+        // 基準点の移動と回転
+        let rotHip      = new THREE.Quaternion().setFromAxisAngle( new THREE.Vector3( 0 , 1 , 0 ) , Math.PI ).multiply( getQuaternion( vecRight , posRHip.clone().sub( posLHip ) ) );
+        vrmPose.hips    = { position: hipPose.toArray(), rotation: rotHip.toArray() };
+        // 各関節の回転を設定
+        // 太もも
+        vrmPose.leftUpperLeg    = { rotation : getQuaternion( vecDown , posLKnee.clone().sub( posLHip ) ).toArray() };
+        vrmPose.rightUpperLeg   = { rotation : getQuaternion( vecDown , posRKnee.clone().sub( posRHip ) ).toArray() };
+        // 膝
+        vrmPose.leftLowerLeg    = { rotation : getQuaternion( posLKnee.clone().sub( posLHip ) , posLAnkle.clone().sub( posLKnee ) ).toArray() };
+        vrmPose.rightLowerLeg   = { rotation : getQuaternion( posRKnee.clone().sub( posRHip ) , posRAnkle.clone().sub( posRKnee ) ).toArray() };
+        // 足首
+        vrmPose.leftFoot        = { rotation : getQuaternion( vecFront , posLToes.clone().sub( posLHeel ) ).toArray() };
+        vrmPose.rightFoot       = { rotation : getQuaternion( vecFront , posRToes.clone().sub( posRHeel ) ).toArray() };
+        // 脊椎
+        vrmPose.spine           = { rotation : getQuaternion( vecUp ,  posNeck.clone().sub( posSpine ) ).toArray() };
+        // 首
+        vrmPose.neck            = { rotation : getQuaternion( posNeck.clone().sub( posSpine ) ,  posCenterEye.clone().sub( posCenterMouth ) ).toArray() };
+        // 胸
+        vrmPose.chest           = { rotation : getQuaternion( posLHip.clone().sub( posRHip ) ,  posLShoulder.clone().sub( posRShoulder ) ).toArray() };
+        // 肩
+        vrmPose.leftUpperArm    = { rotation : getQuaternion( vecLeft  , posLElbow.clone().sub( posLShoulder ) ).toArray() };
+        vrmPose.rightUpperArm   = { rotation : getQuaternion( vecRight , posRElbow.clone().sub( posRShoulder ) ).toArray() };
+        // 肘
+        vrmPose.leftLowerArm    = { rotation : getQuaternion( posLElbow.clone().sub( posLShoulder ) , posLWrist.clone().sub( posLElbow ) ).toArray() };
+        vrmPose.rightLowerArm   = { rotation : getQuaternion( posRElbow.clone().sub( posRShoulder ) , posRWrist.clone().sub( posRElbow ) ).toArray() };
+        // 手首
+        vrmPose.leftHand        = { rotation : getQuaternion( posLWrist.clone().sub( posLElbow ) , posLMiddle.clone().sub( posLWrist ) ).toArray() };
+        vrmPose.rightHand       = { rotation : getQuaternion( posRWrist.clone().sub( posRElbow ) , posRMiddle.clone().sub( posRWrist ) ).toArray() };
+        return vrmPose;
+      }
+
+      // vrmのモデルの基準点座標の取得
+      let _initHip = null;
+      function getHipPos(results) {
+        // 戻り値
+        let hipPos = null;
+        // 二次元画像上の情報を取得
+        let landmarks = results.poseLandmarks;
+        let posLHip = landmarks[MP_POSE.left_hip];
+        let posRHip = landmarks[MP_POSE.right_hip]
+        // hipの位置を計算
+        let x = (posLHip.x+posRHip.x)/2;
+        let y = (posLHip.y+posRHip.y)/2;
+        let z = (posLHip.z+posRHip.z)/2;
+        // 相対位置を計算
+        if (_initHip == null) {
+          _initHip = new THREE.Vector3(x, y, z);
+          hipPos = new THREE.Vector3(0, 0, 0);
+        } else {
+          let relateX = (_initHip.x-x);
+          let relateY = (_initHip.y-y);
+          let relateZ = (_initHip.z-z);
+          hipPos = new THREE.Vector3(relateX, relateY, relateZ);
+        }
+        // 座標変換
+        hipPos.set( -hipPos.x, hipPos.y, hipPos.z);
+        return hipPos;
+      }      
+      
+      let vrnCamera;       // カメラ
+      let vrmScene;        // シーン
+      let vrmRenderer;     // レンダラー
+      let vrmCameraControls;     // カメラコントロール
+      let vrmModel;
+
+      // mediaPipeの関連ファイルの読み込み
+      const config = {
+          locateFile: file => `https://cdn.jsdelivr.net/npm/@mediapipe/pose/${file}`
+      };
+      const pose = new Pose(config);
+      pose.setOptions({
+          modelComplexity: 1,
+          smoothLandmarks: true,
+          enableSegmentation: true,
+          smoothSegmentation: true,
+          minDetectionConfidence: 0.5,
+          minTrackingConfidence: 0.5
+      });
+      
+      const video = document.getElementById('videoInput');
+      const camera = new Camera(video, {
+        onFrame: async () => {
+          await pose.send({image: video});
+        }
+      });
+
+      // 姿勢推定
+      pose.onResults(results => {
+        if (results.poseLandmarks) {
+          // vrmのポーズ変更
+          let hipPos = getHipPos(results);
+          console.log(hipPos)
+          // vrmModel.humanoid.setPose( convToVrmPose( hipPos , results.poseWorldLandmarks) );
+        }
+      });
+      camera.start();
+
       /* すべての読み込みが終わってからThree.js関連の処理を実行 */
       function init() {
         // オブジェクト、カメラ、ライトなどすべての要素を格納するシーン作成 
-        scene = new THREE.Scene();
-        scene.fog = new THREE.FogExp2(0xffffff, 0.005); // 遠くの物が霞んで見える設定
+        vrmScene = new THREE.Scene();
+        vrmScene.fog = new THREE.FogExp2(0xffffff, 0.005); // 遠くの物が霞んで見える設定
         // カメラ作成
-        camera = new THREE.PerspectiveCamera(
+        vrnCamera = new THREE.PerspectiveCamera(
           45,                                     // 視野
           window.innerWidth / window.innerHeight, // アスペクト比
           0.1,                                    // どの程度のカメラの距離から描画を始めるか
           1000                                    // どのくらい遠くまで見えるか
         );
-        scene.add(camera);                        // カメラをシーンに追加
-        camera.position.x = -30;
-        camera.position.y = 40;
-        camera.position.z = 30;
-        camera.lookAt(scene.position);            // シーンの中心にカメラを向ける
+        vrmScene.add(vrnCamera);                        // カメラをシーンに追加
+        vrnCamera.position.x = -50;
+        vrnCamera.position.y = 0;
+        vrnCamera.position.z = 0;
+        vrnCamera.lookAt(vrmScene.position);            // シーンの中心にカメラを向ける
         // レンダラー作成
-        renderer = new THREE.WebGLRenderer();
-        renderer.setClearColor(new THREE.Color(0xeeeeee));
-        renderer.setPixelRatio(window.devicePixelRatio);    // 解像度変更
-        renderer.setSize(window.innerWidth, window.innerHeight);
-        renderer.shadowMap.enabled = true;        // オブジェクトシャドウを有効化
+        vrmRenderer = new THREE.WebGLRenderer();
+        vrmRenderer.setClearColor(new THREE.Color(0xeeeeee));
+        vrmRenderer.setPixelRatio(window.devicePixelRatio);    // 解像度変更
+        vrmRenderer.setSize(window.innerWidth, window.innerHeight);
+        vrmRenderer.shadowMap.enabled = true;        // オブジェクトシャドウを有効化
         
         // 均等光源(影なし)
         var ambientLight = new THREE.AmbientLight(0x0c0c0c, 1);
-        scene.add(ambientLight);
+        vrmScene.add(ambientLight);
         // 点座標への光源(影あり)
         var spotLight = new THREE.SpotLight(0xffffff, 1);
         spotLight.position.set(-20, 30, -5);
         spotLight.castShadow = true; // 影を落とす
-        scene.add(spotLight);
+        vrmScene.add(spotLight);
         // 無限遠からの平行光源
         var directionalLight = new THREE.DirectionalLight(0xffffff, 0.5);
         directionalLight.position.set(20, -30, 5).normalize(); // 光源方向設定
-        scene.add(directionalLight);
+        vrmScene.add(directionalLight);
         /* glbファイルの読み込み */
         const loader = new GLTFLoader();
         loader.load ('./AliciaSolid.vrm', function(gltf){
           gltf.scene.scale.set(6, 6, 6);                      // モデルスケール変更
-          gltf.scene.position.set(0, 0, 0);                   // モデル位置変更
-          gltf.scene.rotation.set(0, (0 * Math.PI /180), 0);  // モデル向き変更
-          scene.add(gltf.scene);                              // モデルをシーンに追加
+          gltf.scene.position.set(0, -5, 0);                   // モデル位置変更
+          gltf.scene.rotation.set(0, (90 * Math.PI /180), 0);  // モデル向き変更
+          vrmScene.add(gltf.scene);                              // モデルをシーンに追加
         }, undefined, function (error) {
           console.error(error);
         }); 
         // レンダラーの出力をhtmlの(WebGL-output)に追加
         document
           .getElementById("WebGL-output")
-          .appendChild(renderer.domElement);
+          .appendChild(vrmRenderer.domElement);
         // OrbitControlsを初期化し、カメラとレンダラーを渡す
-        controls = new OrbitControls(camera, renderer.domElement);
-        controls.enableRotate = true; // カメラの回転を有効化
+        vrmCameraControls = new OrbitControls(vrnCamera, vrmRenderer.domElement);
+        vrmCameraControls.enableRotate = true; // カメラの回転を有効化
         // シーンを描画
         render();
       }
       // シーンを描画する関数
       function render() {
           requestAnimationFrame(render);  // レンダリング(再帰)
-          renderer.render(scene, camera); // 表示
+          vrmRenderer.render(vrmScene, vrnCamera); // 表示
       }
       
       // 表示領域をウィンドウサイズに合わせる
       function onResize() {
-        camera.aspect = window.innerWidth / window.innerHeight;
-        camera.updateProjectionMatrix();
-        renderer.setSize(window.innerWidth, window.innerHeight);
+        vrnCamera.aspect = window.innerWidth / window.innerHeight;
+        vrnCamera.updateProjectionMatrix();
+        vrmRenderer.setSize(window.innerWidth, window.innerHeight);
       }
       // 表示が終わってからThree.js関連処理(関数init)を実行
       window.addEventListener("load", init);
